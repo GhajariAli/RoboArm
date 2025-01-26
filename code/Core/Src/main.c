@@ -165,35 +165,36 @@ int main(void)
 	  }
 	  if (MessageReceived) {
 		  if (ReceivedMessage[0]=='f') { // F for Forward
-			  sprintf(msg,"Moving Forward: %d steps, %d us intervals \n",RequestedSteps,StepTimeDelay);
 			  RequestedDirection=Forward;
 			  RequestedSteps=2500;
 			  StepTimeDelay=400;
+			  sprintf(msg,"Moving Forward: %d steps, %d us intervals \n",RequestedSteps,StepTimeDelay);
 			  MoveStepperCompleted=0;
 		  }
 		  else if (ReceivedMessage[0]=='r'){ // R for reverse
-			  sprintf(msg,"Moving Reverse: %d steps, %d us intervals \n",RequestedSteps,StepTimeDelay);
 			  RequestedDirection=Reverse;
 			  RequestedSteps=2500;
 			  StepTimeDelay=400;
+			  sprintf(msg,"Moving Reverse: %d steps, %d us intervals \n",RequestedSteps,StepTimeDelay);
 			  MoveStepperCompleted=0;
 		  }
-		  else if (ReceivedMessage[0]=='s'){
+		  else if (ReceivedMessage[0]=='s'){ // S for Stop
 			  strcpy(msg,"Stop Command received \n");
-			  RequestedDirection=Stop; 		// S for Stop
+			  StepCount=0;
+			  RequestedDirection=Stop;
 		  }
 		  else if (ReceivedMessage[0]=='h'){
 			  strcpy(msg,"Home Command received \n");
 			  Homed=0; 		// h for Home
 		  }
-		  else if (ReceivedMessage[0]=='a'){ // Left Arrow key
+		  else if (ReceivedMessage[0]=='a'){ // Left
 			  strcpy(msg,"Jog Forward \n");
 			  RequestedDirection=Forward;
 			  RequestedSteps=2;
 			  StepTimeDelay=4000;
 			  MoveStepperCompleted=0;
 		  }
-		  else if (ReceivedMessage[0]=='d'){ // Right Arrow key
+		  else if (ReceivedMessage[0]=='d'){ // Right
 			  strcpy(msg,"Jog Reverse \n");
 			  RequestedDirection=Reverse;
 			  RequestedSteps=2;
@@ -212,13 +213,14 @@ int main(void)
 		  switch (HomingStep){
 		  case 10: //Move Forward a bit
 			  if (!msgSent){
-				  strcpy(msg,"Homing - Moving Forward...\n");
+				  strcpy(msg,"Homing...\n");
 				  HAL_UART_Transmit_IT(&hlpuart1,msg ,strlen(msg));
 				  msgSent=1;
+				  MoveStepperCompleted=0;
 			  }
 			  StepTimeDelay=2000;
 			  RequestedDirection=Forward;
-			  RequestedSteps=500;
+			  RequestedSteps=250;
 			  if (MoveStepperCompleted) {
 				  HomingStep=20;
 				  msgSent=0;
@@ -226,11 +228,11 @@ int main(void)
 			  break;
 		  case 20: // Move Backward until reaching home switch
 			  if (!msgSent){
-				  strcpy(msg,"Homing - Moving Reverse, waiting for switch...\n");
+				  strcpy(msg,"Waiting for switch\n");
 				  HAL_UART_Transmit_IT(&hlpuart1, msg ,strlen(msg));
 				  msgSent=1;
+				  MoveStepperCompleted=0;
 			  }
-			  MoveStepperCompleted=0;
 			  RequestedDirection=Reverse;
 			  RequestedSteps=1000000;
 			  if (HomeLimitDetected) {
@@ -240,9 +242,10 @@ int main(void)
 			  break;
 		  case 30: // Move to step 100 az new position 0
 			  if (!msgSent){
-				  strcpy(msg,"Homing - Switch Detected Moving to Axis Step 100...\n");
+				  strcpy(msg,"Moving to 0\n");
 				  HAL_UART_Transmit_IT(&hlpuart1, msg ,strlen(msg));
 				  msgSent=1;
+				  MoveStepperCompleted=0;
 			  }
 			  RequestedDirection=Forward;
 			  RequestedSteps=100;
@@ -253,7 +256,7 @@ int main(void)
 			  break;
 		  case 40:
 			  if (!msgSent){
-				  strcpy(msg,"Homing Completed - Axis Homed!\n");
+				  strcpy(msg,"Axis Homed!\n");
 				  HAL_UART_Transmit_IT(&hlpuart1, msg ,strlen(msg));
 				  msgSent=1;
 			  }
