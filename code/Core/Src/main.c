@@ -24,6 +24,7 @@
 #include "stdio.h"
 #include "servo.h"
 #include "stepper.h"
+#include "string.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -119,13 +120,12 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-  char msg[100];
-  int len;
-  len= sprintf(msg,"RoboArm Starting ...\n");
-  HAL_UART_Transmit_IT(&hlpuart1, msg,len);
+  char msg[1000];
+  strcpy(msg,"RoboArm Starting ...\n");
+  HAL_UART_Transmit_IT(&hlpuart1, msg,strlen(msg));
   HAL_Delay(1000);
-  len= sprintf(msg,"RoboArm Ready!\n");
-  HAL_UART_Transmit_IT(&hlpuart1, msg,len);
+  strcpy(msg,"RoboArm Ready!\n");
+  HAL_UART_Transmit_IT(&hlpuart1, msg,strlen(msg));
   HAL_Delay(100);
   HAL_UART_Receive_DMA(&hlpuart1,&ReceivedMessage , 1);
   HAL_TIM_Base_Start(&htim2);
@@ -152,6 +152,9 @@ int main(void)
   Direction RequestedDirection=Stop;
   uint32_t RequestedSteps=1000;
   uint8_t MoveStepperCompleted=0;
+  uint32_t StepTimeDelay=350;
+  uint8_t HomingStep=10;
+  int8_t msgSent=0;
 
   while (1)
   {
@@ -161,8 +164,8 @@ int main(void)
 		  PreviousSysTick= HAL_GetTick();
 	  }
 	  if (MessageReceived) {
-		  len= sprintf(msg,"Received Message: %s \n",ReceivedMessage);
-		  HAL_UART_Transmit_IT(&hlpuart1, msg,len);
+		  sprintf(msg,"Received Message: %s \n",ReceivedMessage);
+		  HAL_UART_Transmit_IT(&hlpuart1, msg,strlen(msg));
 		  if (ReceivedMessage[0]=='f') {
 			  RequestedDirection=Forward; 			// F for Forward
 			  MoveStepperCompleted=0;
@@ -175,20 +178,76 @@ int main(void)
 			  RequestedDirection=Stop; 		// S for Stop
 		  }
 		  else {
-			  len= sprintf(msg,"Undefined\n",ReceivedMessage[0]);
-			  HAL_UART_Transmit_IT(&hlpuart1, msg,len);
+			  sprintf(msg,"Undefined\n",ReceivedMessage[0]);
+			  HAL_UART_Transmit_IT(&hlpuart1, msg,strlen(msg));
 		  }
 		  MessageReceived=0;
 	  }
+	  // Homing Sequence
+	  if(!Homed){
+		  switch (HomingStep){
+		  case 10: //Move Forward a bit
+			  if (!msgSent){
+				  strcpy(msg,"Homing - Moving Forward...\n");
+				  HAL_UART_Transmit_IT(&hlpuart1,msg ,strlen(msg));
+				  msgSent=1;
+			  }
+			  StepTimeDelay=2000;
+			  RequestedDirection=Forward;
+			  RequestedSteps=500;
+			  if (MoveStepperCompleted) {
+				  HomingStep=20;
+				  msgSent=0;
+			  }
+			  break;
+		  case 20: // Move Backward until reaching home switch
+			  if (!msgSent){
+				  strcpy(msg,"Homing - Moving Reverse, waiting for switch...\n");
+				  HAL_UART_Transmit_IT(&hlpuart1, msg ,strlen(msg));
+				  msgSent=1;
+			  }
+			  MoveStepperCompleted=0;
+			  RequestedDirection=Reverse;
+			  RequestedSteps=1000000;
+			  if (HomeLimitDetected) {
+				  HomingStep=30;
+				  msgSent=0;
+			  }
+			  break;
+		  case 30: // Move to step 100 az new position 0
+			  if (!msgSent){
+				  strcpy(msg,"Homing - Switch Detected Moving to Axis Step 100...\n");
+				  HAL_UART_Transmit_IT(&hlpuart1, msg ,strlen(msg));
+				  msgSent=1;
+			  }
+			  RequestedDirection=Forward;
+			  RequestedSteps=100;
+			  if (MoveStepperCompleted) {
+				  HomingStep=40;
+				  msgSent=0;
+			  }
+			  break;
+		  case 40:
+			  if (!msgSent){
+				  strcpy(msg,"Homing Completed - Axis Homed!\n");
+				  HAL_UART_Transmit_IT(&hlpuart1, msg ,strlen(msg));
+				  msgSent=1;
+			  }
+			  Homed=1;
+			  HomingStep=10;
+			  break;
+		  }
+	  }
 
-	  if (htim2.Instance->CNT -  PreviousTimerValue > 2000 ){ //MIN 350 AT 24vDC
-		  if ( (RequestedDirection==Forward || RequestedDirection==Reverse) && !MoveStepperCompleted ){
+	  if (htim2.Instance->CNT -  PreviousTimerValue > StepTimeDelay ){ //MIN 350 AT 24vDC
+		  if ( (RequestedDirection==Forward || RequestedDirection==Reverse) && !MoveStepperCompleted){
 			  MoveStepperCompleted= MoveStepper(RequestedDirection, RequestedSteps);
 		  }
 		  PreviousTimerValue=htim2.Instance->CNT;
 	  }
 	  if(HomeLimitDetected){
 		  RequestedDirection=Stop;
+		  StepCount=0;
 		  HomeLimitDetected=0;
 	  }
 

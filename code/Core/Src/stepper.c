@@ -59,6 +59,10 @@ uint8_t MoveStepper(Direction Dir,uint32_t Steps){
     }
 	if(StepCount==Steps) {
 		StepCount=0;
+		HAL_GPIO_WritePin(StepperQ1_GPIO_Port, StepperQ1_Pin, 0);
+		HAL_GPIO_WritePin(StepperQ2_GPIO_Port, StepperQ2_Pin, 0);
+		HAL_GPIO_WritePin(StepperQ3_GPIO_Port, StepperQ3_Pin, 0);
+		HAL_GPIO_WritePin(StepperQ4_GPIO_Port, StepperQ4_Pin, 0);
 		return 1;
 	}
 	else return 0;
