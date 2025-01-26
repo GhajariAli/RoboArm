@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
 #include "servo.h"
+#include "stepper.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -54,6 +55,7 @@ TypeServo J1Servo;
 uint32_t PreviousSysTick=0;
 uint8_t Homed=0;
 uint8_t HomeLimitDetected=0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -143,10 +145,14 @@ int main(void)
   HAL_Delay(2000);
 
 
-  int StepperState=0;
+
   uint32_t PreviousTimerValue=0;
-  int StepperDirection=0; //1 forward 0 reverse
   int PositionReached=0;
+
+  Direction RequestedDirection=Stop;
+  uint32_t RequestedSteps=1000;
+  uint8_t MoveStepperCompleted=0;
+
   while (1)
   {
 	  if (HAL_GetTick()-PreviousSysTick>=10 && !PositionReached){
@@ -154,71 +160,38 @@ int main(void)
 		  htim1.Instance->CCR1=J1Servo.output_pwm;
 		  PreviousSysTick= HAL_GetTick();
 	  }
-
-
 	  if (MessageReceived) {
 		  len= sprintf(msg,"Received Message: %s \n",ReceivedMessage);
 		  HAL_UART_Transmit_IT(&hlpuart1, msg,len);
-		  if (ReceivedMessage[0]=='F') StepperDirection=1; // F for forward
-		  else if (ReceivedMessage[0]=='B') StepperDirection=0; // B for Backward
-		  else if (ReceivedMessage[0]=='S') StepperState=0;//S for Stop
-		  else if (ReceivedMessage[0]=='R') StepperState=1;//R for Run
+		  if (ReceivedMessage[0]=='f') {
+			  RequestedDirection=Forward; 			// F for Forward
+			  MoveStepperCompleted=0;
+		  }
+		  else if (ReceivedMessage[0]=='b'){
+			  RequestedDirection=Reverse; 	// B for Backward
+			  MoveStepperCompleted=0;
+		  }
+		  else if (ReceivedMessage[0]=='s'){
+			  RequestedDirection=Stop; 		// S for Stop
+		  }
 		  else {
 			  len= sprintf(msg,"Undefined\n",ReceivedMessage[0]);
 			  HAL_UART_Transmit_IT(&hlpuart1, msg,len);
 		  }
-
 		  MessageReceived=0;
 	  }
-	  if (htim2.Instance->CNT -  PreviousTimerValue > 2000){ //MIN 350 AT 25vDC
-		  if (StepperDirection){
-			  if (StepperState<8 && StepperState>0) StepperState++;
-			  else if (StepperState==8) StepperState=1;
-		  }
-		  else{
-			  if (StepperState>1) StepperState--;
-			  else if (StepperState==1) StepperState=8;
+
+	  if (htim2.Instance->CNT -  PreviousTimerValue > 2000 ){ //MIN 350 AT 24vDC
+		  if ( (RequestedDirection==Forward || RequestedDirection==Reverse) && !MoveStepperCompleted ){
+			  MoveStepperCompleted= MoveStepper(RequestedDirection, RequestedSteps);
 		  }
 		  PreviousTimerValue=htim2.Instance->CNT;
 	  }
 	  if(HomeLimitDetected){
-		  StepperState=0;
-		  StepperDirection=1;
+		  RequestedDirection=Stop;
 		  HomeLimitDetected=0;
 	  }
-	  switch (StepperState){
-	  case 1:
-		  HAL_GPIO_WritePin(StepperQ4_GPIO_Port, StepperQ4_Pin, 0);
-		  break;
-	  case 2:
-		  HAL_GPIO_WritePin(StepperQ2_GPIO_Port, StepperQ2_Pin, 1);
-		  break;
-	  case 3:
-		  HAL_GPIO_WritePin(StepperQ1_GPIO_Port, StepperQ1_Pin, 0);
-		  break;
-	  case 4:
-		  HAL_GPIO_WritePin(StepperQ3_GPIO_Port, StepperQ3_Pin, 1);
-		  break;
-	  case 5:
-		  HAL_GPIO_WritePin(StepperQ2_GPIO_Port, StepperQ2_Pin, 0);
-		  break;
-	  case 6:
-		  HAL_GPIO_WritePin(StepperQ4_GPIO_Port, StepperQ4_Pin, 1);
-		  break;
-	  case 7:
-		  HAL_GPIO_WritePin(StepperQ3_GPIO_Port, StepperQ3_Pin, 0);
-		  break;
-	  case 8:
-		  HAL_GPIO_WritePin(StepperQ1_GPIO_Port, StepperQ1_Pin, 1);
-		  break;
-	  default:
-		  StepperState=0;
-		  HAL_GPIO_WritePin(StepperQ1_GPIO_Port, StepperQ1_Pin, 0);
-		  HAL_GPIO_WritePin(StepperQ2_GPIO_Port, StepperQ2_Pin, 0);
-		  HAL_GPIO_WritePin(StepperQ3_GPIO_Port, StepperQ3_Pin, 0);
-		  HAL_GPIO_WritePin(StepperQ4_GPIO_Port, StepperQ4_Pin, 0);
-		  break;
-	  }
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
