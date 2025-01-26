@@ -164,23 +164,47 @@ int main(void)
 		  PreviousSysTick= HAL_GetTick();
 	  }
 	  if (MessageReceived) {
-		  sprintf(msg,"Received Message: %s \n",ReceivedMessage);
-		  HAL_UART_Transmit_IT(&hlpuart1, msg,strlen(msg));
-		  if (ReceivedMessage[0]=='f') {
-			  RequestedDirection=Forward; 			// F for Forward
+		  if (ReceivedMessage[0]=='f') { // F for Forward
+			  sprintf(msg,"Moving Forward: %d steps, %d us intervals \n",RequestedSteps,StepTimeDelay);
+			  RequestedDirection=Forward;
+			  RequestedSteps=2500;
+			  StepTimeDelay=400;
 			  MoveStepperCompleted=0;
 		  }
-		  else if (ReceivedMessage[0]=='b'){
-			  RequestedDirection=Reverse; 	// B for Backward
+		  else if (ReceivedMessage[0]=='r'){ // R for reverse
+			  sprintf(msg,"Moving Reverse: %d steps, %d us intervals \n",RequestedSteps,StepTimeDelay);
+			  RequestedDirection=Reverse;
+			  RequestedSteps=2500;
+			  StepTimeDelay=400;
 			  MoveStepperCompleted=0;
 		  }
 		  else if (ReceivedMessage[0]=='s'){
+			  strcpy(msg,"Stop Command received \n");
 			  RequestedDirection=Stop; 		// S for Stop
+		  }
+		  else if (ReceivedMessage[0]=='h'){
+			  strcpy(msg,"Home Command received \n");
+			  Homed=0; 		// h for Home
+		  }
+		  else if (ReceivedMessage[0]=='a'){ // Left Arrow key
+			  strcpy(msg,"Jog Forward \n");
+			  RequestedDirection=Forward;
+			  RequestedSteps=2;
+			  StepTimeDelay=4000;
+			  MoveStepperCompleted=0;
+		  }
+		  else if (ReceivedMessage[0]=='d'){ // Right Arrow key
+			  strcpy(msg,"Jog Reverse \n");
+			  RequestedDirection=Reverse;
+			  RequestedSteps=2;
+			  StepTimeDelay=4000;
+			  MoveStepperCompleted=0;
 		  }
 		  else {
 			  sprintf(msg,"Undefined\n",ReceivedMessage[0]);
 			  HAL_UART_Transmit_IT(&hlpuart1, msg,strlen(msg));
 		  }
+		  HAL_UART_Transmit_IT(&hlpuart1, msg,strlen(msg));
 		  MessageReceived=0;
 	  }
 	  // Homing Sequence
@@ -239,12 +263,15 @@ int main(void)
 		  }
 	  }
 
+
+	  // Move command happens here only
 	  if (htim2.Instance->CNT -  PreviousTimerValue > StepTimeDelay ){ //MIN 350 AT 24vDC
 		  if ( (RequestedDirection==Forward || RequestedDirection==Reverse) && !MoveStepperCompleted){
 			  MoveStepperCompleted= MoveStepper(RequestedDirection, RequestedSteps);
 		  }
 		  PreviousTimerValue=htim2.Instance->CNT;
 	  }
+	  //Limit switch on motor side kills and zeros everthing - this used for homing as well
 	  if(HomeLimitDetected){
 		  RequestedDirection=Stop;
 		  StepCount=0;
