@@ -121,10 +121,10 @@ int main(void)
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   char msg[1000];
-  strcpy(msg,"RoboArm Starting ...\n");
+  strcpy(msg,"Axis Starting ...\n");
   HAL_UART_Transmit_IT(&hlpuart1, msg,strlen(msg));
   HAL_Delay(1000);
-  strcpy(msg,"RoboArm Ready!\n");
+  strcpy(msg,"Axis Ready!\n");
   HAL_UART_Transmit_IT(&hlpuart1, msg,strlen(msg));
   HAL_Delay(100);
   HAL_UART_Receive_DMA(&hlpuart1,&ReceivedMessage , 1);
@@ -142,7 +142,7 @@ int main(void)
 
   htim1.Instance->CCR1=500;//home servo to zero
   J1Servo.current_position_degrees=0;
-  HAL_Delay(2000);
+  HAL_Delay(1000);
 
 
 
@@ -155,7 +155,10 @@ int main(void)
   uint32_t StepTimeDelay=350;
   uint8_t HomingStep=10;
   int8_t msgSent=0;
-
+  int8_t MotionSteps=10;
+  int8_t ExecuteMotion=0;
+  int32_t PreviousStepCount=0;
+  uint32_t LastSysTick=0;
   while (1)
   {
 	  if (HAL_GetTick()-PreviousSysTick>=10 && !PositionReached){
@@ -163,25 +166,30 @@ int main(void)
 		  htim1.Instance->CCR1=J1Servo.output_pwm;
 		  PreviousSysTick= HAL_GetTick();
 	  }
+
+	  //Parse received commands
 	  if (MessageReceived) {
 		  if (ReceivedMessage[0]=='f') { // F for Forward
 			  RequestedDirection=Forward;
 			  RequestedSteps=2500;
 			  StepTimeDelay=400;
-			  sprintf(msg,"Moving Forward: %d steps, %d us intervals \n",RequestedSteps,StepTimeDelay);
+			  sprintf(msg,"Moving Forward: %ld steps, %ld us intervals \n",RequestedSteps,StepTimeDelay);
 			  MoveStepperCompleted=0;
 		  }
 		  else if (ReceivedMessage[0]=='r'){ // R for reverse
 			  RequestedDirection=Reverse;
 			  RequestedSteps=2500;
 			  StepTimeDelay=400;
-			  sprintf(msg,"Moving Reverse: %d steps, %d us intervals \n",RequestedSteps,StepTimeDelay);
+			  sprintf(msg,"Moving Reverse: %ld steps, %ld us intervals \n",RequestedSteps,StepTimeDelay);
 			  MoveStepperCompleted=0;
 		  }
 		  else if (ReceivedMessage[0]=='s'){ // S for Stop
 			  strcpy(msg,"Stop Command received \n");
 			  StepCount=0;
 			  RequestedDirection=Stop;
+			  ExecuteMotion=0;
+			  MotionSteps=10;
+			  MoveStepperCompleted=1;
 		  }
 		  else if (ReceivedMessage[0]=='h'){
 			  strcpy(msg,"Home Command received \n");
@@ -190,16 +198,20 @@ int main(void)
 		  else if (ReceivedMessage[0]=='a'){ // Left
 			  strcpy(msg,"Jog Forward \n");
 			  RequestedDirection=Forward;
-			  RequestedSteps=2;
+			  RequestedSteps=1;
 			  StepTimeDelay=4000;
 			  MoveStepperCompleted=0;
 		  }
 		  else if (ReceivedMessage[0]=='d'){ // Right
 			  strcpy(msg,"Jog Reverse \n");
 			  RequestedDirection=Reverse;
-			  RequestedSteps=2;
+			  RequestedSteps=1;
 			  StepTimeDelay=4000;
 			  MoveStepperCompleted=0;
+		  }
+		  else if (ReceivedMessage[0]=='1'){ // Right
+			  strcpy(msg,"Executing Motion Profile 1 \n");
+			  ExecuteMotion=1;
 		  }
 		  else {
 			  sprintf(msg,"Undefined\n",ReceivedMessage[0]);
@@ -262,6 +274,73 @@ int main(void)
 			  }
 			  Homed=1;
 			  HomingStep=10;
+			  break;
+		  }
+	  }
+
+	  //Motion Sequence
+	  if(ExecuteMotion){
+		  uint32_t MinStepDelay=600;
+		  uint32_t MaxStepDelay=3000;
+		  uint32_t AccelSpan=500;
+
+		  switch(MotionSteps){
+		  case 10:
+			  StepCount=0;
+			  StepTimeDelay=MaxStepDelay;
+			  RequestedDirection=Forward;
+			  RequestedSteps=2500;
+			  if(( HAL_GetTick()-LastSysTick)>=500 ||1) {
+				  MoveStepperCompleted=0;
+				  MotionSteps=20;
+			  }
+			  break;
+		  case 20:
+			  if (PreviousStepCount!=StepCount){
+				  StepTimeDelay-=(MaxStepDelay-MinStepDelay)/AccelSpan;
+				  PreviousStepCount=StepCount;
+			  }
+			  if (StepCount>=AccelSpan) MotionSteps=30;
+			  break;
+		  case 30:
+			  //wait
+			  if (StepCount>=(2500-AccelSpan)) MotionSteps=40;
+			  break;
+		  case 40:
+			  if (PreviousStepCount!=StepCount){
+				  StepTimeDelay+=(MaxStepDelay-MinStepDelay)/AccelSpan;
+				  PreviousStepCount=StepCount;
+			  }
+			  LastSysTick= HAL_GetTick();
+			  if (MoveStepperCompleted) MotionSteps=50;
+			  break;
+		  case 50:
+			  StepCount=0;
+			  RequestedDirection=Reverse;
+			  RequestedSteps=2500;
+			  if ( (HAL_GetTick()-LastSysTick)>=500||1) {
+				  MoveStepperCompleted=0;
+				  MotionSteps=60;
+			  }
+			  break;
+		  case 60:
+			  if (PreviousStepCount!=StepCount){
+				  StepTimeDelay-=(MaxStepDelay-MinStepDelay)/AccelSpan;
+				  PreviousStepCount=StepCount;
+			  }
+			  if (StepCount>=AccelSpan) MotionSteps=70;
+			  break;
+		  case 70:
+			  //wait
+			  if (StepCount>=(2500-AccelSpan)) MotionSteps=80;
+			  break;
+		  case 80:
+			  if (PreviousStepCount!=StepCount){
+				  StepTimeDelay+=(MaxStepDelay-MinStepDelay)/AccelSpan;
+				  PreviousStepCount=StepCount;
+			  }
+			  LastSysTick= HAL_GetTick();
+			  if (MoveStepperCompleted ) MotionSteps=10;
 			  break;
 		  }
 	  }
