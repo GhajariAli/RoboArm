@@ -3,7 +3,7 @@
 uint32_t StepCount=0;
 uint8_t StepperState=1;
 
-uint8_t MoveStepper(Direction Dir,uint32_t Steps){
+uint8_t MoveStepperL296(Direction Dir,uint32_t Steps){
 
 	if(Dir==Stop) return 0;
 
@@ -66,4 +66,23 @@ uint8_t MoveStepper(Direction Dir,uint32_t Steps){
 		return 1;
 	}
 	else return 0;
+}
+
+
+uint8_t MoveStepperTMC2209(Direction Dir,uint32_t Steps){
+	if(Dir==Stop) return 0;
+	else if (Dir==Forward){
+		HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, 1);
+	}
+	else if(Dir == Reverse){
+		HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, 0);
+	}
+
+	HAL_GPIO_TogglePin(STEP_GPIO_Port, STEP_Pin);
+	StepCount++;
+	if(StepCount==Steps) {
+		StepCount=0;
+		return 1;
+	}
+	return 0;
 }

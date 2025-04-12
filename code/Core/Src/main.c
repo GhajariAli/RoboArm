@@ -171,15 +171,15 @@ int main(void)
 	  if (MessageReceived) {
 		  if (ReceivedMessage[0]=='f') { // F for Forward
 			  RequestedDirection=Forward;
-			  RequestedSteps=2500;
-			  StepTimeDelay=400;
+			  RequestedSteps=20000;
+			  StepTimeDelay=40;
 			  sprintf(msg,"Moving Forward: %ld steps, %ld us intervals \n",RequestedSteps,StepTimeDelay);
 			  MoveStepperCompleted=0;
 		  }
 		  else if (ReceivedMessage[0]=='r'){ // R for reverse
 			  RequestedDirection=Reverse;
-			  RequestedSteps=2500;
-			  StepTimeDelay=400;
+			  RequestedSteps=20000;
+			  StepTimeDelay=40;
 			  sprintf(msg,"Moving Reverse: %ld steps, %ld us intervals \n",RequestedSteps,StepTimeDelay);
 			  MoveStepperCompleted=0;
 		  }
@@ -205,8 +205,8 @@ int main(void)
 		  else if (ReceivedMessage[0]=='d'){ // Right
 			  strcpy(msg,"Jog Reverse \n");
 			  RequestedDirection=Reverse;
-			  RequestedSteps=1;
-			  StepTimeDelay=4000;
+			  RequestedSteps=10;
+			  StepTimeDelay=400;
 			  MoveStepperCompleted=0;
 		  }
 		  else if (ReceivedMessage[0]=='1'){ // Right
@@ -230,9 +230,9 @@ int main(void)
 				  msgSent=1;
 				  MoveStepperCompleted=0;
 			  }
-			  StepTimeDelay=2000;
+			  StepTimeDelay=300;
 			  RequestedDirection=Forward;
-			  RequestedSteps=250;
+			  RequestedSteps=500;
 			  if (MoveStepperCompleted) {
 				  HomingStep=20;
 				  msgSent=0;
@@ -246,7 +246,7 @@ int main(void)
 				  MoveStepperCompleted=0;
 			  }
 			  RequestedDirection=Reverse;
-			  RequestedSteps=1000000;
+			  RequestedSteps=10000000;
 			  if (HomeLimitDetected) {
 				  HomingStep=30;
 				  msgSent=0;
@@ -260,7 +260,7 @@ int main(void)
 				  MoveStepperCompleted=0;
 			  }
 			  RequestedDirection=Forward;
-			  RequestedSteps=100;
+			  RequestedSteps=750;
 			  if (MoveStepperCompleted) {
 				  HomingStep=40;
 				  msgSent=0;
@@ -280,8 +280,8 @@ int main(void)
 
 	  //Motion Sequence
 	  if(ExecuteMotion){
-		  uint32_t MinStepDelay=600;
-		  uint32_t MaxStepDelay=3000;
+		  uint32_t MinStepDelay=10;
+		  uint32_t MaxStepDelay=1000;
 		  uint32_t AccelSpan=500;
 
 		  switch(MotionSteps){
@@ -289,8 +289,8 @@ int main(void)
 			  StepCount=0;
 			  StepTimeDelay=MaxStepDelay;
 			  RequestedDirection=Forward;
-			  RequestedSteps=2500;
-			  if(( HAL_GetTick()-LastSysTick)>=500 ||1) {
+			  RequestedSteps=20000;
+			  if(( HAL_GetTick()-LastSysTick)>=50 ||1) {
 				  MoveStepperCompleted=0;
 				  MotionSteps=20;
 			  }
@@ -304,7 +304,7 @@ int main(void)
 			  break;
 		  case 30:
 			  //wait
-			  if (StepCount>=(2500-AccelSpan)) MotionSteps=40;
+			  if (StepCount>=(20000-AccelSpan)) MotionSteps=40;
 			  break;
 		  case 40:
 			  if (PreviousStepCount!=StepCount){
@@ -317,8 +317,8 @@ int main(void)
 		  case 50:
 			  StepCount=0;
 			  RequestedDirection=Reverse;
-			  RequestedSteps=2500;
-			  if ( (HAL_GetTick()-LastSysTick)>=500||1) {
+			  RequestedSteps=20000;
+			  if ( (HAL_GetTick()-LastSysTick)>=50||1) {
 				  MoveStepperCompleted=0;
 				  MotionSteps=60;
 			  }
@@ -332,7 +332,7 @@ int main(void)
 			  break;
 		  case 70:
 			  //wait
-			  if (StepCount>=(2500-AccelSpan)) MotionSteps=80;
+			  if (StepCount>=(20000-AccelSpan)) MotionSteps=80;
 			  break;
 		  case 80:
 			  if (PreviousStepCount!=StepCount){
@@ -349,7 +349,7 @@ int main(void)
 	  // Move command happens here only
 	  if (htim2.Instance->CNT -  PreviousTimerValue > StepTimeDelay ){ //MIN 350 AT 24vDC
 		  if ( (RequestedDirection==Forward || RequestedDirection==Reverse) && !MoveStepperCompleted){
-			  MoveStepperCompleted= MoveStepper(RequestedDirection, RequestedSteps);
+			  MoveStepperCompleted= MoveStepperTMC2209(RequestedDirection, RequestedSteps);
 		  }
 		  PreviousTimerValue=htim2.Instance->CNT;
 	  }
@@ -473,8 +473,6 @@ static void MX_TIM1_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
 
   /* USER CODE BEGIN TIM1_Init 1 */
 
@@ -495,10 +493,6 @@ static void MX_TIM1_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
@@ -506,38 +500,9 @@ static void MX_TIM1_Init(void)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_ENABLE;
-  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
-  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
-  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
-  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 0;
-  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
-  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
-  sBreakDeadTimeConfig.BreakFilter = 0;
-  sBreakDeadTimeConfig.BreakAFMode = TIM_BREAK_AFMODE_INPUT;
-  sBreakDeadTimeConfig.Break2State = TIM_BREAK2_DISABLE;
-  sBreakDeadTimeConfig.Break2Polarity = TIM_BREAK2POLARITY_HIGH;
-  sBreakDeadTimeConfig.Break2Filter = 0;
-  sBreakDeadTimeConfig.Break2AFMode = TIM_BREAK_AFMODE_INPUT;
-  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
-  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
   /* USER CODE BEGIN TIM1_Init 2 */
 
   /* USER CODE END TIM1_Init 2 */
-  HAL_TIM_MspPostInit(&htim1);
 
 }
 
@@ -621,10 +586,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, LD2_Pin|StepperQ1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, STEP_Pin|DIR_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, StepperQ2_Pin|StepperQ3_Pin|StepperQ4_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -632,25 +597,25 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pins : STEP_Pin DIR_Pin */
+  GPIO_InitStruct.Pin = STEP_Pin|DIR_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
   /*Configure GPIO pin : HomeSwitch_Pin */
   GPIO_InitStruct.Pin = HomeSwitch_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(HomeSwitch_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LD2_Pin StepperQ1_Pin */
-  GPIO_InitStruct.Pin = LD2_Pin|StepperQ1_Pin;
+  /*Configure GPIO pin : LD2_Pin */
+  GPIO_InitStruct.Pin = LD2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : StepperQ2_Pin StepperQ3_Pin StepperQ4_Pin */
-  GPIO_InitStruct.Pin = StepperQ2_Pin|StepperQ3_Pin|StepperQ4_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
